@@ -1,0 +1,221 @@
+# =============================
+# Configuração de logging padrão para todos os serviços
+# =============================
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "${LOG_MAX_SIZE:-10m}"      # Limita tamanho de cada arquivo de log
+    max-file: "${LOG_MAX_FILE:-3}"        # Mantém no máximo 3 arquivos rotacionados
+    compress: "true"                      # Comprime arquivos antigos para economizar espaço
+
+services:
+  # =============================
+  # Banco de Dados (Postgres)
+  # =============================
+  postgres:
+    image: postgres:15
+    restart: unless-stopped               # Reinicia automaticamente em caso de falha
+    environment:
+      POSTGRES_USER: user                 # Usuário do banco
+      POSTGRES_PASSWORD: password         # Senha do banco
+      POSTGRES_DB: analytics              # Nome do banco inicial
+    volumes:
+      - pg_data:/var/lib/postgresql/data  # Persistência dos dados do Postgres
+    ports:
+      - 5432                               # Porta exposta localmente para conexões
+    logging: *default-logging
+    healthcheck:                           # Teste de saúde para garantir que o Postgres está pronto
+      test: ["CMD-SHELL", "pg_isready -U user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # =============================
+  # MinIO (Object Storage tipo S3)
+  # =============================
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"  # Habilita painel web no :9001
+    environment:
+      MINIO_ROOT_USER: minio                  # Usuário admin
+      MINIO_ROOT_PASSWORD: minio123           # Senha admin
+    volumes:
+      - minio_data:/data                      # Persistência dos objetos
+    ports:
+      - "9000:9000"                           # API S3 compatível
+      - "9001:9001"                           # Console UI
+    logging: *default-logging
+
+  # =============================
+  # Pulsar (Mensageria)
+  # =============================
+  pulsar:
+    image: apachepulsar/pulsar:3.0.0
+    command: bin/pulsar standalone            # Modo standalone: broker + bookkeeper
+    restart: unless-stopped
+    ports:
+      - "6650:6650"                           # Porta para producers/consumers
+      - "8080:8080"                           # Porta HTTP para admin e REST
+    volumes:
+      - pulsar_data:/pulsar/data              # Persistência dos segmentos
+      - pulsar_bookkeeper:/pulsar/data/bookkeeper  # Persistência do bookkeeper
+    logging: *default-logging
+
+  # =============================
+  # MlFlow (Modelos)
+  # =============================
+  mlflow-db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mlflow
+      POSTGRES_PASSWORD: mlflow
+      POSTGRES_DB: mlflow
+    volumes:
+      - mlflow_db_data:/var/lib/postgresql/data
+    logging: *default-logging
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    restart: unless-stopped
+    depends_on:
+      - mlflow-db
+      - minio
+    ports:
+      - "5000:5000"
+    environment:
+      # Backend store
+      MLFLOW_BACKEND_STORE_URI: postgresql://mlflow:mlflow@mlflow-db:5432/mlflow
+      # Artifacts no MinIO
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://mlflow:mlflow@mlflow-db:5432/mlflow
+      --default-artifact-root s3://mlflow/
+      --host 0.0.0.0
+      --port 5000
+    logging: *default-logging
+
+
+  # =============================
+  # Windmill - Infra de Orquestração
+  # =============================
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: changeme        # Senha da instância do Windmill
+      POSTGRES_DB: windmill              # Banco usado pelo Windmill
+    volumes:
+      - windmill_db:/var/lib/postgresql/data
+    expose:
+      - 5432                             # Somente exposto internamente
+    logging: *default-logging
+    healthcheck:                         # Teste de saúde para dependências
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  windmill_server:
+    image: ${WM_IMAGE:-ghcr.io/windmill-labs/windmill:latest}
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://postgres:changeme@db:5432/windmill
+      - MODE=server                       # Inicia o Windmill em modo servidor
+    depends_on:
+      db:
+        condition: service_healthy         # Só inicia após o Postgres estar pronto
+    ports:
+      - "8000:8000"                        # UI e API pública do Windmill
+    volumes:
+      - worker_logs:/tmp/windmill/logs     # Logs persistentes
+    logging: *default-logging
+
+  windmill_worker:
+    image: ${WM_IMAGE:-ghcr.io/windmill-labs/windmill:latest}
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://postgres:changeme@db:5432/windmill
+      - MODE=worker                       # Worker padrão
+      - WORKER_GROUP=default              # Grupo de execução
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"                     # Limita uso de CPU do worker
+          memory: 1024M                   # Limita uso de RAM
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # Para executar scripts que usam Docker
+      - worker_cache:/tmp/windmill/cache            # Cache do Worker
+      - worker_logs:/tmp/windmill/logs              # Logs compartilhados
+    logging: *default-logging
+
+  windmill_worker_native:
+    image: ${WM_IMAGE:-ghcr.io/windmill-labs/windmill:latest}
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://postgres:changeme@db:5432/windmill
+      - MODE=worker                         # Worker nativo otimizado
+      - WORKER_GROUP=native                 # Grupo separado para workloads intensivos
+      - NUM_WORKERS=4                       # Número de workers internos
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1024M
+    volumes:
+      - worker_logs:/tmp/windmill/logs
+    logging: *default-logging
+
+  # =============================
+  # Caddy (Reverse Proxy)
+  # =============================
+  caddy:
+    image: ghcr.io/windmill-labs/caddy-l4:latest
+    restart: unless-stopped
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile   # Arquivo de configuração
+      - caddy_data:/data                   # Persistência do estado TLS
+    ports:
+      - 80:80                              # Porta HTTP principal
+      - 25:25                              # Porta adicional (ex.: SMTP interno)
+      # - 443:443                          # HTTPS, caso ativado
+    environment:
+      - BASE_URL=":80"                     # Necessário para roteamento interno do Caddy
+    logging: *default-logging
+
+  # =============================
+  # LSP (Servidor de Language Server do Windmill)
+  # =============================
+  lsp:
+    image: ghcr.io/windmill-labs/windmill-lsp:latest
+    pull_policy: always
+    restart: unless-stopped
+    expose:
+      - 3001                               # Somente interno
+    volumes:
+      - lsp_cache:/pyls/.cache             # Cache do LSP
+    logging: *default-logging
+
+# =============================
+# Volumes persistentes usados pelos serviços
+# =============================
+volumes:
+  pg_data: {}            # Armazena dados do Postgres de analytics
+  minio_data: {}         # Armazena objetos do MinIO
+  mlflow_db_data:        # Armazena dados do Mlflow
+  windmill_db: {}        # Banco do Windmill
+  worker_cache: {}       # Cache dos workers
+  worker_logs: {}        # Logs persistentes
+  caddy_data: {}         # Estado TLS do Caddy
+  lsp_cache: {}          # Cache do LSP
+  pulsar_data: {}        # Dados do Pulsar
+  pulsar_bookkeeper: {}  # Dados do Bookkeeper do Pulsar
